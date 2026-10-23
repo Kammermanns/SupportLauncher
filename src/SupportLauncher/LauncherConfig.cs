@@ -27,7 +27,7 @@ namespace SupportLauncher
             if (!File.Exists(path))
                 return cfg;
 
-            var values = ParseIni(File.ReadAllLines(path, Encoding.UTF8));
+            var values = ParseIni(ReadLines(path));
 
             cfg.CompanyName = Get(values, "CompanyName", cfg.CompanyName);
             cfg.WindowTitle = Get(values, "WindowTitle", cfg.WindowTitle);
@@ -44,6 +44,35 @@ namespace SupportLauncher
                 cfg.TimeoutSeconds = t;
 
             return cfg;
+        }
+
+        /// <summary>
+        /// Reads the file line by line, accepting UTF-8 (with or without BOM) and the
+        /// Windows ANSI code page. Mixed files happen when the setup writes overrides
+        /// with the Windows INI API into a UTF-8 file, so each line is decoded on its own.
+        /// </summary>
+        private static string[] ReadLines(string path)
+        {
+            var bytes = File.ReadAllBytes(path);
+            int start = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF ? 3 : 0;
+            var strictUtf8 = new UTF8Encoding(false, true);
+            var lines = new List<string>();
+
+            int lineStart = start;
+            for (int i = start; i <= bytes.Length; i++)
+            {
+                if (i == bytes.Length || bytes[i] == (byte)'\n')
+                {
+                    int len = i - lineStart;
+                    if (len > 0 && bytes[lineStart + len - 1] == (byte)'\r') len--;
+                    string line;
+                    try { line = strictUtf8.GetString(bytes, lineStart, len); }
+                    catch (DecoderFallbackException) { line = Encoding.Default.GetString(bytes, lineStart, len); }
+                    lines.Add(line);
+                    lineStart = i + 1;
+                }
+            }
+            return lines.ToArray();
         }
 
         private static Dictionary<string, string> ParseIni(string[] lines)

@@ -1,9 +1,20 @@
 ; Inno Setup script for SupportLauncher
 ; Build:   iscc /DAppVersion=1.0.0 /DSourceDir=..\publish installer\SupportLauncher.iss
 ;
+; UNIVERSAL SETUP: the setup does not need to be rebuilt per company.
+; Put these files next to SupportLauncher-Setup.exe and they are installed
+; instead of the built-in defaults (all optional):
+;
+;   SupportLauncher-Setup.exe
+;   launcher.ini     settings (download link, company name, shortcut name ...)
+;   logo.png         logo shown in the launcher window
+;   app.ico          icon for the shortcut and the launcher window
+;
+; The signed setup and EXE stay untouched, so their signatures remain valid.
+;
 ; Silent install examples:
 ;   SupportLauncher-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
-;   SupportLauncher-Setup.exe /VERYSILENT /URL="https://get.teamviewer.com/xyz" /COMPANY="Muster AG"
+;   SupportLauncher-Setup.exe /VERYSILENT /URL="https://get.teamviewer.com/xyz" /COMPANY="Muster AG" /NAME="Fernwartung Muster"
 ;   SupportLauncher-Setup.exe /VERYSILENT /CURRENTUSER        (no admin rights needed)
 ; Silent uninstall:
 ;   "%ProgramFiles%\SupportLauncher\unins000.exe" /VERYSILENT
@@ -13,9 +24,6 @@
 #endif
 #ifndef SourceDir
   #define SourceDir "..\publish"
-#endif
-#ifndef ShortcutName
-  #define ShortcutName "Fernwartung"
 #endif
 
 #define AppName "SupportLauncher"
@@ -29,7 +37,6 @@ AppVersion={#AppVersion}
 AppPublisher=SupportLauncher contributors
 AppPublisherURL=https://github.com/Kammermanns/SupportLuncher
 DefaultDirName={autopf}\{#AppName}
-DefaultGroupName={#ShortcutName}
 DisableProgramGroupPage=yes
 DisableDirPage=yes
 DisableReadyPage=yes
@@ -38,7 +45,7 @@ PrivilegesRequiredOverridesAllowed=commandline dialog
 OutputDir=..\dist
 OutputBaseFilename=SupportLauncher-Setup
 SetupIconFile=..\branding\app.ico
-UninstallDisplayIcon={app}\{#AppExe}
+UninstallDisplayIcon={app}\app.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -54,9 +61,20 @@ Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "{#SourceDir}\{#AppExe}";   DestDir: "{app}"; Flags: ignoreversion
-Source: "{#SourceDir}\launcher.ini"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#SourceDir}\logo.png";     DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+Source: "{#SourceDir}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
+
+; Files next to the setup win. Built-in defaults are only used if no file is
+; next to the setup, and never overwrite a configuration from an earlier install.
+Source: "{src}\launcher.ini";          DestDir: "{app}"; Flags: external ignoreversion; Check: SrcHas('launcher.ini')
+Source: "..\branding\launcher.ini";    DestDir: "{app}"; Flags: onlyifdoesntexist;     Check: not SrcHas('launcher.ini')
+
+Source: "{src}\app.ico";               DestDir: "{app}"; Flags: external ignoreversion; Check: SrcHas('app.ico')
+Source: "..\branding\app.ico";         DestDir: "{app}"; Flags: onlyifdoesntexist;     Check: not SrcHas('app.ico')
+
+Source: "{src}\logo.png";              DestDir: "{app}"; Flags: external ignoreversion; Check: SrcHas('logo.png')
+#if FileExists(AddBackslash(SourcePath) + "..\branding\logo.png")
+Source: "..\branding\logo.png";        DestDir: "{app}"; Flags: onlyifdoesntexist;     Check: not SrcHas('logo.png')
+#endif
 
 [INI]
 ; Optional overrides from the command line (/URL=..., /COMPANY=...)
@@ -64,17 +82,56 @@ Filename: "{app}\launcher.ini"; Section: "Launcher"; Key: "DownloadUrl"; String:
 Filename: "{app}\launcher.ini"; Section: "Launcher"; Key: "CompanyName"; String: "{param:COMPANY}"; Check: HasParam('COMPANY')
 
 [Icons]
-Name: "{group}\{#ShortcutName}";       Filename: "{app}\{#AppExe}"
-Name: "{autodesktop}\{#ShortcutName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
+Name: "{autoprograms}\{code:GetShortcutName}"; Filename: "{app}\{#AppExe}"; IconFilename: "{app}\app.ico"
+Name: "{autodesktop}\{code:GetShortcutName}";  Filename: "{app}\{#AppExe}"; IconFilename: "{app}\app.ico"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#ShortcutName}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{code:GetShortcutName}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{localappdata}\SupportLauncher"
 
 [Code]
+const
+  DefaultShortcutName = 'Fernwartung';
+
 function HasParam(Name: String): Boolean;
 begin
   Result := ExpandConstant('{param:' + Name + '|}') <> '';
+end;
+
+function SrcHas(Name: String): Boolean;
+begin
+  Result := FileExists(ExpandConstant('{src}\' + Name));
+end;
+
+function CleanFileName(S: String): String;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 1 to Length(S) do
+    if Pos(S[I], '\/:*?"<>|') = 0 then
+      Result := Result + S[I];
+  Result := Trim(Result);
+end;
+
+{ Shortcut name: /NAME=... > ShortcutName in launcher.ini next to the setup
+  > ShortcutName in an already installed launcher.ini > "Fernwartung". }
+function GetShortcutName(Param: String): String;
+var
+  Ini: String;
+begin
+  Result := ExpandConstant('{param:NAME|}');
+  if Result = '' then
+  begin
+    Ini := ExpandConstant('{src}\launcher.ini');
+    if not FileExists(Ini) then
+      Ini := ExpandConstant('{app}\launcher.ini');
+    if FileExists(Ini) then
+      Result := GetIniString('Launcher', 'ShortcutName', '', Ini);
+  end;
+  Result := CleanFileName(Result);
+  if Result = '' then
+    Result := DefaultShortcutName;
 end;

@@ -34,7 +34,15 @@ namespace SupportLauncher
             BackColor = Color.White;
             Font = new Font("Segoe UI", 9.75f);
             ClientSize = new Size(420, 230);
-            try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { /* default icon */ }
+            // app.ico next to the EXE (installed by the setup) wins over the built-in icon.
+            try
+            {
+                var icoPath = Path.Combine(baseDir, "app.ico");
+                Icon = File.Exists(icoPath)
+                    ? new Icon(icoPath)
+                    : Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+            }
+            catch { /* keep default icon */ }
 
             var logo = new PictureBox
             {

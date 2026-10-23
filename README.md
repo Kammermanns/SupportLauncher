@@ -23,7 +23,7 @@ Everything organisation-specific lives in [`branding/`](branding):
 |---|---|
 | `launcher.ini` | Company name, window texts, download URL, allowed publisher(s) |
 | `logo.png` | Optional logo shown in the window (about 380 × 80 px) |
-| `app.ico` | Icon of the EXE, installer and shortcut |
+| `app.ico` | Icon of the EXE, installer and shortcut (built-in default) |
 
 Key settings in `launcher.ini`:
 
@@ -39,6 +39,17 @@ AllowedPublishers=TeamViewer Germany GmbH
 
 Download `SupportLauncher-Setup.exe` from the [Releases](../../releases) page.
 
+**The setup is universal.** You do not need to rebuild it for your company: put your files next to the setup and it installs them instead of the built-in defaults.
+
+```
+SupportLauncher-Setup.exe
+launcher.ini      settings: download link, company name, shortcut name, ...
+logo.png          optional: logo in the launcher window (about 380 x 80 px)
+app.ico           optional: icon for the shortcut and the window
+```
+
+Use [`branding/launcher.ini`](branding/launcher.ini) as a template. The signed setup and EXE are not modified, so their signatures stay valid. Without files next to the setup, an existing configuration from an earlier installation is kept.
+
 ```bat
 :: interactive
 SupportLauncher-Setup.exe
@@ -49,14 +60,16 @@ SupportLauncher-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 :: silent, current user only (no admin)
 SupportLauncher-Setup.exe /VERYSILENT /CURRENTUSER
 
-:: silent with overrides
-SupportLauncher-Setup.exe /VERYSILENT /URL="https://get.teamviewer.com/xyz" /COMPANY="Example Ltd"
+:: silent with overrides instead of a launcher.ini
+SupportLauncher-Setup.exe /VERYSILENT /URL="https://get.teamviewer.com/xyz" /COMPANY="Example Ltd" /NAME="Remote Support"
 
 :: silent uninstall
 "%ProgramFiles%\SupportLauncher\unins000.exe" /VERYSILENT
 ```
 
-The installer creates a desktop and start menu shortcut ("Fernwartung"). Downloaded modules are cached in `%LOCALAPPDATA%\SupportLauncher`.
+The installer creates a desktop and start menu shortcut (`ShortcutName`, default "Fernwartung"). Downloaded modules are cached in `%LOCALAPPDATA%\SupportLauncher`.
+
+Note: the shortcut name is read with the Windows INI API, so keep `ShortcutName` free of umlauts or pass it with `/NAME=`. All other values may contain any characters (UTF-8 or ANSI).
 
 ## Building
 
