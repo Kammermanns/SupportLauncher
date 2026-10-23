@@ -1,0 +1,134 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write        # needed to create the draft release on tags
+      actions: read          # needed by SignPath to fetch the artifact
+    env:
+      # Signing only runs on version tags AND once SignPath is configured.
+      SIGN: ${{ startsWith(github.ref, 'refs/tags/v') && vars.SIGNPATH_PROJECT_SLUG != '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine version
+        id: ver
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/v*') { $v = $env:GITHUB_REF_NAME.Substring(1) } else { $v = '0.0.0' }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build launcher
+        run: dotnet publish src/SupportLauncher/SupportLauncher.csproj -c Release -o publish -p:Version=${{ steps.ver.outputs.version }}
+
+      - name: Keep only release files
+        shell: pwsh
+        run: Get-ChildItem publish -Exclude SupportLauncher.exe,launcher.ini,logo.png | Remove-Item -Recurse -Force
+
+      # ---------- Stage 1: sign SupportLauncher.exe ----------
+      - name: Upload unsigned launcher
+        id: upload-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-unsigned
+          path: publish/SupportLauncher.exe
+          if-no-files-found: error
+
+      - name: Sign launcher (SignPath)
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_LAUNCHER_CONFIG_SLUG }}
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed-launcher
+
+      - name: Use signed launcher
+        if: env.SIGN == 'true'
+        shell: pwsh
+        run: |
+          Copy-Item signed-launcher/SupportLauncher.exe publish/SupportLauncher.exe -Force
+          ./build/Verify-Signature.ps1 -Path publish/SupportLauncher.exe
+
+      # ---------- Build installer from the (signed) launcher ----------
+      - name: Ensure Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue) -and
+              -not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup -y --no-progress
+          }
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc /DAppVersion=${{ steps.ver.outputs.version }} /DSourceDir=..\publish installer\SupportLauncher.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # ---------- Stage 2: sign the installer ----------
+      - name: Upload unsigned installer
+        id: upload-setup
+        uses: actions/upload-artifact@v4
+        with:
+          name: setup-unsigned
+          path: dist/SupportLauncher-Setup.exe
+          if-no-files-found: error
+
+      - name: Sign installer (SignPath)
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_SETUP_CONFIG_SLUG }}
+          github-artifact-id: ${{ steps.upload-setup.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed-setup
+
+      - name: Verify signed installer
+        if: env.SIGN == 'true'
+        shell: pwsh
+        run: |
+          Copy-Item signed-setup/SupportLauncher-Setup.exe dist/SupportLauncher-Setup.exe -Force
+          ./build/Verify-Signature.ps1 -Path dist/SupportLauncher-Setup.exe
+
+      - name: Checksum
+        shell: pwsh
+        run: (Get-FileHash dist/SupportLauncher-Setup.exe -Algorithm SHA256).Hash.ToLower() + "  SupportLauncher-Setup.exe" | Out-File dist/SHA256SUMS.txt -Encoding ascii
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: SupportLauncher-Setup
+          path: dist/*
+
+      - name: Draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create $env:GITHUB_REF_NAME dist/SupportLauncher-Setup.exe dist/SHA256SUMS.txt --draft --generate-notes

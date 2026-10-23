@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration for the launcher.
+  Paste this into the SignPath project as artifact configuration "launcher"
+  and set the repository variable SIGNPATH_LAUNCHER_CONFIG_SLUG accordingly.
+  GitHub artifacts arrive as a ZIP file.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="SupportLauncher.exe">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

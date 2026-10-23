@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Targets .NET Framework 4.8, which ships with every supported Windows 10/11.
+    Result: a single small EXE (~50 KB) with no runtime to install.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>SupportLauncher</AssemblyName>
+    <RootNamespace>SupportLauncher</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <Version>1.0.0</Version>
+    <Product>SupportLauncher</Product>
+    <Description>Downloads the latest remote support module and starts it.</Description>
+    <Copyright>MIT License</Copyright>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="Exists('..\..\branding\app.ico')">
+    <ApplicationIcon>..\..\branding\app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+
+  <!-- Branding files are copied next to the EXE so the installer can pick them up. -->
+  <ItemGroup>
+    <None Include="..\..\branding\launcher.ini" Link="launcher.ini" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\branding\logo.png" Link="logo.png" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\branding\logo.png')" />
+  </ItemGroup>
+
+</Project>
