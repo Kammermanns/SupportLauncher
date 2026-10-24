@@ -2,7 +2,10 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Globalization;
+using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -147,6 +150,13 @@ namespace SupportLauncher
 
             var target = Path.Combine(cacheDir, _config.FileName);
             var temp = target + ".download";
+            var infoPath = target + ".cache";
+
+            // A cached copy is only reused if it still passes the full signature check.
+            string ignoredDetails;
+            var cacheValid = File.Exists(target) &&
+                             SignatureVerifier.IsTrusted(target, _config.AllowedPublishers, true, out ignoredDetails);
+            var cached = cacheValid ? CacheInfo.Load(infoPath) : new CacheInfo();
 
             string error = null;
             try
@@ -154,18 +164,27 @@ namespace SupportLauncher
                 if (string.IsNullOrWhiteSpace(_config.DownloadUrl))
                     throw new InvalidOperationException("Kein Download-Link konfiguriert.");
 
-                await DownloadAsync(_config.DownloadUrl, temp, _cts.Token);
+                var result = await DownloadAsync(_config.DownloadUrl, temp, cacheValid ? cached : null, _cts.Token);
 
-                string details;
-                if (!SignatureVerifier.IsTrusted(temp, _config.AllowedPublishers, true, out details))
+                if (result.NotModified)
                 {
-                    TryDelete(temp);
-                    throw new InvalidOperationException("Die heruntergeladene Datei ist nicht vertrauenswürdig.\n" + details);
+                    _status.Text = "Aktuelle Version ist bereits vorhanden.";
                 }
+                else
+                {
+                    string details;
+                    if (!SignatureVerifier.IsTrusted(temp, _config.AllowedPublishers, true, out details))
+                    {
+                        TryDelete(temp);
+                        throw new InvalidOperationException("Die heruntergeladene Datei ist nicht vertrauenswürdig.\n" + details);
+                    }
 
-                // Replace the cached copy only after a successful check.
-                TryDelete(target);
-                File.Move(temp, target);
+                    // Replace the cached copy only after a successful check.
+                    CacheInfo.Delete(infoPath);
+                    TryDelete(target);
+                    File.Move(temp, target);
+                    result.Info.Save(infoPath);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -221,44 +240,82 @@ namespace SupportLauncher
             Close();
         }
 
+        private sealed class DownloadResult
+        {
+            public bool NotModified;
+            public CacheInfo Info;
+        }
+
         /// <summary>
         /// Downloads the module. Links like https://get.teamviewer.com/xyz return an HTML
         /// page instead of the EXE; in that case the EXE link is taken from the page
         /// (up to two hops). The signature check afterwards decides whether it is started.
+        /// If <paramref name="cached"/> describes the same server file, nothing is downloaded.
         /// </summary>
-        private async Task DownloadAsync(string url, string path, CancellationToken token)
+        private async Task<DownloadResult> DownloadAsync(string url, string path, CacheInfo cached, CancellationToken token)
         {
             using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(_config.TimeoutSeconds) })
             {
                 // Browser-like user agent: some download pages serve different content otherwise.
                 http.DefaultRequestHeaders.UserAgent.ParseAdd(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SupportLauncher/1.1");
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) SupportLauncher/1.2");
 
                 var current = new Uri(url);
                 for (int hop = 0; hop < 3; hop++)
                 {
-                    using (var response = await http.GetAsync(current, HttpCompletionOption.ResponseHeadersRead, token))
+                    using (var request = new HttpRequestMessage(HttpMethod.Get, current))
                     {
-                        response.EnsureSuccessStatusCode();
-
-                        var mediaType = response.Content.Headers.ContentType?.MediaType ?? "";
-                        if (mediaType.IndexOf("html", StringComparison.OrdinalIgnoreCase) >= 0)
+                        // Ask the server to answer "304 Not Modified" if our copy is current.
+                        if (cached != null && CacheInfo.SameAddress(cached.Url, current.ToString()))
                         {
-                            var html = await response.Content.ReadAsStringAsync();
-                            var baseUri = response.RequestMessage?.RequestUri ?? current;
-                            var next = FindExeLink(html, baseUri);
-                            if (next == null)
-                                throw new InvalidOperationException(
-                                    "Unter dem Download-Link wurde keine Programmdatei gefunden.\n" + baseUri);
-                            current = next;
-                            continue;
+                            EntityTagHeaderValue etag;
+                            if (cached.ETag.Length > 0 && EntityTagHeaderValue.TryParse(cached.ETag, out etag))
+                                request.Headers.IfNoneMatch.Add(etag);
+                            DateTimeOffset lm;
+                            if (cached.LastModified.Length > 0 &&
+                                DateTimeOffset.TryParse(cached.LastModified, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out lm))
+                                request.Headers.IfModifiedSince = lm;
                         }
 
-                        await SaveAsync(response, path, token);
-                        if (!LooksLikeExe(path))
-                            throw new InvalidOperationException(
-                                "Die heruntergeladene Datei ist keine Programmdatei.\n" + current);
-                        return;
+                        using (var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token))
+                        {
+                            var finalUri = response.RequestMessage?.RequestUri ?? current;
+
+                            if (response.StatusCode == HttpStatusCode.NotModified && cached != null)
+                                return new DownloadResult { NotModified = true, Info = cached };
+
+                            response.EnsureSuccessStatusCode();
+
+                            var mediaType = response.Content.Headers.ContentType?.MediaType ?? "";
+                            if (mediaType.IndexOf("html", StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                var html = await response.Content.ReadAsStringAsync();
+                                var next = FindExeLink(html, finalUri);
+                                if (next == null)
+                                    throw new InvalidOperationException(
+                                        "Unter dem Download-Link wurde keine Programmdatei gefunden.\n" + finalUri);
+                                current = next;
+                                continue;
+                            }
+
+                            var info = new CacheInfo
+                            {
+                                Url = finalUri.ToString(),
+                                ETag = response.Headers.ETag?.ToString() ?? "",
+                                LastModified = response.Content.Headers.LastModified?.ToString("R", CultureInfo.InvariantCulture) ?? "",
+                                Length = response.Content.Headers.ContentLength ?? -1
+                            };
+
+                            // Server ignored the conditional request but reports the same file.
+                            if (cached != null && info.Matches(cached))
+                                return new DownloadResult { NotModified = true, Info = cached };
+
+                            await SaveAsync(response, path, token);
+                            if (!LooksLikeExe(path))
+                                throw new InvalidOperationException(
+                                    "Die heruntergeladene Datei ist keine Programmdatei.\n" + current);
+                            return new DownloadResult { NotModified = false, Info = info };
+                        }
                     }
                 }
                 throw new InvalidOperationException("Zu viele Weiterleitungen beim Download.");
