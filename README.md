@@ -48,7 +48,7 @@ logo.png          optional: logo in the launcher window (about 380 x 80 px)
 app.ico           optional: icon for the shortcut and the window
 ```
 
-Use [`branding/launcher.ini`](branding/launcher.ini) as a template. The signed setup and EXE are not modified, so their signatures stay valid. Without files next to the setup, an existing configuration from an earlier installation is kept.
+Use [`branding/launcher.ini`](branding/launcher.ini) as a template, or start from the working [demo](demo): `SupportLauncher-Demo.zip` on the [latest build](../../releases/tag/latest-build) contains the setup with demo files and runs out of the box. The signed setup and EXE are not modified, so their signatures stay valid. Without files next to the setup, an existing configuration from an earlier installation is kept.
 
 ```bat
 :: interactive
