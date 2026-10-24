@@ -163,7 +163,7 @@ jobs:
           gh release create latest-build dist/SupportLauncher.zip dist/SupportLauncher-Demo.zip dist/SupportLauncher-Setup.exe dist/SupportLauncher.exe dist/SHA256SUMS.txt `
             --prerelease --target $env:GITHUB_SHA --title "Latest build (unsigned)" --notes $notes
 
-      - name: Draft release
+      - name: Release files
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         env:
@@ -174,4 +174,11 @@ jobs:
 
           **Code signing policy:** Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org). Details: [Code signing policy](https://github.com/$env:GITHUB_REPOSITORY/blob/main/CODE_SIGNING_POLICY.md) · [Privacy](https://github.com/$env:GITHUB_REPOSITORY/blob/main/PRIVACY.md)
           "@
-          gh release create $env:GITHUB_REF_NAME dist/SupportLauncher.zip dist/SupportLauncher-Demo.zip dist/SupportLauncher-Setup.exe dist/SupportLauncher.exe dist/SHA256SUMS.txt --draft --generate-notes --notes $notes
+          $files = 'dist/SupportLauncher.zip','dist/SupportLauncher-Demo.zip','dist/SupportLauncher-Setup.exe','dist/SupportLauncher.exe','dist/SHA256SUMS.txt'
+          gh release view $env:GITHUB_REF_NAME *> $null
+          if ($LASTEXITCODE -eq 0) {
+            # Release was created by hand on GitHub (tag created on publish): attach the files.
+            gh release upload $env:GITHUB_REF_NAME @files --clobber
+          } else {
+            gh release create $env:GITHUB_REF_NAME @files --draft --generate-notes --notes $notes
+          }
