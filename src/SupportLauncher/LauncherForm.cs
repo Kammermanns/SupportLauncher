@@ -387,14 +387,7 @@ namespace SupportLauncher
         {
             try
             {
-                using (var p = Process.Start(new ProcessStartInfo(path)
-                {
-                    UseShellExecute = true,
-                    WorkingDirectory = Path.GetDirectoryName(path)
-                }))
-                {
-                    return p?.Id ?? 0;
-                }
+                return ProcessStarter.Start(path);
             }
             catch (Exception ex)
             {
