@@ -195,11 +195,30 @@ namespace SupportLauncher
                 }
             }
 
-            if (Start(target))
+            var pid = Start(target);
+            if (pid < 0)
+                return;
+
+            // Stay open until the support window is visible, so the customer
+            // sees that something is happening on slow PCs.
+            _progress.Style = ProgressBarStyle.Marquee;
+            _status.ForeColor = Color.FromArgb(60, 60, 60);
+            _status.Text = _config.StartingText;
+
+            var deadline = DateTime.UtcNow.AddSeconds(_config.StartWaitSeconds);
+            while (DateTime.UtcNow < deadline)
             {
-                await Task.Delay(800);
-                Close();
+                if (_cts.IsCancellationRequested) return;
+                bool visible;
+                try { visible = WindowWatcher.HasVisibleWindow(pid, _config.WindowProcessNames); }
+                catch { visible = true; }   // never keep the window open because of a detection error
+                if (visible)
+                    break;
+                try { await Task.Delay(400, _cts.Token); } catch (OperationCanceledException) { return; }
             }
+
+            await Task.Delay(1000);   // let the support window come to the front
+            Close();
         }
 
         /// <summary>
@@ -306,21 +325,24 @@ namespace SupportLauncher
             catch { return false; }
         }
 
-        private bool Start(string path)
+        /// <summary>Starts the module; returns its process id, or -1 on failure.</summary>
+        private int Start(string path)
         {
             try
             {
-                Process.Start(new ProcessStartInfo(path)
+                using (var p = Process.Start(new ProcessStartInfo(path)
                 {
                     UseShellExecute = true,
                     WorkingDirectory = Path.GetDirectoryName(path)
-                });
-                return true;
+                }))
+                {
+                    return p?.Id ?? 0;
+                }
             }
             catch (Exception ex)
             {
                 ShowError("Das Support-Modul konnte nicht gestartet werden.\n" + ex.Message);
-                return false;
+                return -1;
             }
         }
 

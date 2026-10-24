@@ -20,6 +20,12 @@ namespace SupportLauncher
         public string StatusText { get; private set; } = "Support module is being downloaded …";
         public string SupportContact { get; private set; } = "";
         public int TimeoutSeconds { get; private set; } = 60;
+        /// <summary>Text while waiting for the support module's window.</summary>
+        public string StartingText { get; private set; } = "TeamViewer wird gestartet, bitte einen Moment Geduld …";
+        /// <summary>Process name prefix(es) whose window counts as "started" (comma separated).</summary>
+        public string[] WindowProcessNames { get; private set; } = { "TeamViewer" };
+        /// <summary>Maximum time to keep the launcher open while waiting for that window.</summary>
+        public int StartWaitSeconds { get; private set; } = 120;
 
         public static LauncherConfig Load(string path)
         {
@@ -42,6 +48,13 @@ namespace SupportLauncher
 
             if (int.TryParse(Get(values, "TimeoutSeconds", null), out var t) && t > 0)
                 cfg.TimeoutSeconds = t;
+
+            cfg.StartingText = Get(values, "StartingText", cfg.StartingText);
+            var names = Get(values, "WindowProcessNames", null);
+            if (!string.IsNullOrWhiteSpace(names))
+                cfg.WindowProcessNames = SplitList(names);
+            if (int.TryParse(Get(values, "StartWaitSeconds", null), out var w) && w > 0)
+                cfg.StartWaitSeconds = w;
 
             return cfg;
         }
