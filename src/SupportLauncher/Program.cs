@@ -41,7 +41,11 @@ namespace SupportLauncher
 
                     // Ask for administrator rights once, here. Programs started by an
                     // elevated launcher inherit the rights, so QuickSupport does not ask again.
-                    if (config.RequestAdmin && !isElevatedRestart && !IsElevated())
+                    // Stopping an installed TeamViewer service also needs admin rights.
+                    var needsAdmin = config.RequestAdmin ||
+                                     (config.StopInstalledTeamViewer && InstalledTeamViewer.Detect().IsRunning());
+
+                    if (needsAdmin && !isElevatedRestart && !IsElevated())
                     {
                         if (RestartElevated())
                             return;

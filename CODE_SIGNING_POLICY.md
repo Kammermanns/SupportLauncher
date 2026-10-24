@@ -29,6 +29,7 @@ Behaviour that touches Windows security features, stated openly:
 
 - **Security warning for the started module.** After its own signature and publisher check has passed, the launcher removes the "downloaded from the internet" marker of the module and starts it without the "Open File – Security Warning" dialog. Files that fail the check are never started.
 - **Administrator rights (optional, `RequestAdmin=1`).** The launcher asks for administrator rights through the normal Windows User Account Control prompt, once, and the started module inherits them. Nothing is elevated without that prompt.
+- **Installed TeamViewer (optional, `StopInstalledTeamViewer=1`, default).** An installed TeamViewer blocks QuickSupport. The launcher stops the TeamViewer service and tray program for the session (after the User Account Control prompt) and starts the service again as soon as QuickSupport has been closed. The service configuration is not changed.
 - **Run without administrator rights (optional, `RunWithoutAdmin=1`).** Starts the module with the user's normal rights only. This lowers privileges; it never raises them.
 
 ## Reporting

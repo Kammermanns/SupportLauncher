@@ -37,6 +37,11 @@ namespace SupportLauncher
         /// started by the elevated launcher, then runs with full rights without asking again.
         /// </summary>
         public bool RequestAdmin { get; private set; } = false;
+        /// <summary>
+        /// Stop an installed TeamViewer (service + tray program) before QuickSupport
+        /// starts, and start the service again when QuickSupport has been closed.
+        /// </summary>
+        public bool StopInstalledTeamViewer { get; private set; } = true;
 
         public static LauncherConfig Load(string path)
         {
@@ -69,6 +74,9 @@ namespace SupportLauncher
 
             cfg.RunWithoutAdmin = IsYes(Get(values, "RunWithoutAdmin", ""));
             cfg.RequestAdmin = IsYes(Get(values, "RequestAdmin", ""));
+            var stopTv = Get(values, "StopInstalledTeamViewer", null);
+            if (stopTv != null)
+                cfg.StopInstalledTeamViewer = IsYes(stopTv);
 
             return cfg;
         }

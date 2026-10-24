@@ -28,6 +28,7 @@ namespace SupportLauncher
         private readonly ProgressBar _progress;
         private readonly Button _retry;
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
+        private InstalledTeamViewer _installed;
 
         public LauncherForm(LauncherConfig config, string baseDir)
         {
@@ -116,7 +117,11 @@ namespace SupportLauncher
             Controls.Add(layout);
 
             Shown += async (s, e) => await RunAsync();
-            FormClosing += (s, e) => _cts.Cancel();
+            FormClosing += (s, e) =>
+            {
+                _cts.Cancel();
+                _installed?.RestoreService();   // never leave the service stopped
+            };
         }
 
         private static Label MakeLabel(string text, Font font, Color color)
@@ -214,9 +219,33 @@ namespace SupportLauncher
                 }
             }
 
+            // An installed TeamViewer blocks QuickSupport: stop it for the session.
+            if (_config.StopInstalledTeamViewer)
+            {
+                var tv = InstalledTeamViewer.Detect();
+                if (tv.IsRunning())
+                {
+                    _status.ForeColor = Color.FromArgb(60, 60, 60);
+                    _status.Text = "Installierter TeamViewer wird vorübergehend beendet …";
+                    _installed = tv;
+                    try
+                    {
+                        await Task.Run(() => tv.Stop());
+                    }
+                    catch (Exception ex)
+                    {
+                        // Usually missing admin rights; QuickSupport may still work.
+                        Debug.WriteLine("Stopping installed TeamViewer failed: " + ex.Message);
+                    }
+                }
+            }
+
             var pid = Start(target);
             if (pid < 0)
+            {
+                _installed?.RestoreService();
                 return;
+            }
 
             // Stay open until the support window is visible, so the customer
             // sees that something is happening on slow PCs.
@@ -237,7 +266,30 @@ namespace SupportLauncher
             }
 
             await Task.Delay(1000);   // let the support window come to the front
+
+            // If we stopped the installed TeamViewer, wait invisibly until QuickSupport
+            // has been closed and start the service again.
+            if (_installed != null && _installed.ServiceStoppedByUs)
+            {
+                Hide();
+                ShowInTaskbar = false;
+                await WaitForQuickSupportExitAsync();
+                await Task.Run(() => _installed.RestoreService());
+            }
             Close();
+        }
+
+        private async Task WaitForQuickSupportExitAsync()
+        {
+            int quietChecks = 0;
+            while (quietChecks < 3)   // 3 checks in a row without QuickSupport (~6 s)
+            {
+                bool running;
+                try { running = await Task.Run(() => _installed.QuickSupportRunning(_config.WindowProcessNames)); }
+                catch { running = false; }
+                quietChecks = running ? 0 : quietChecks + 1;
+                await Task.Delay(2000);
+            }
         }
 
         private sealed class DownloadResult
