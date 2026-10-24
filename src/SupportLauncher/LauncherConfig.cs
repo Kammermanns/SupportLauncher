@@ -26,6 +26,12 @@ namespace SupportLauncher
         public string[] WindowProcessNames { get; private set; } = { "TeamViewer" };
         /// <summary>Maximum time to keep the launcher open while waiting for that window.</summary>
         public int StartWaitSeconds { get; private set; } = 120;
+        /// <summary>
+        /// Start the module without admin rights, so Windows does not show the
+        /// User Account Control prompt. The supporter then cannot operate elevated
+        /// windows until the customer confirms them.
+        /// </summary>
+        public bool RunWithoutAdmin { get; private set; } = false;
 
         public static LauncherConfig Load(string path)
         {
@@ -55,6 +61,12 @@ namespace SupportLauncher
                 cfg.WindowProcessNames = SplitList(names);
             if (int.TryParse(Get(values, "StartWaitSeconds", null), out var w) && w > 0)
                 cfg.StartWaitSeconds = w;
+
+            var noAdmin = Get(values, "RunWithoutAdmin", "");
+            cfg.RunWithoutAdmin = noAdmin == "1" ||
+                                  noAdmin.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                                  noAdmin.Equals("ja", StringComparison.OrdinalIgnoreCase) ||
+                                  noAdmin.Equals("yes", StringComparison.OrdinalIgnoreCase);
 
             return cfg;
         }

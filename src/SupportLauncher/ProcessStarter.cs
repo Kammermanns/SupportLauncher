@@ -20,9 +20,17 @@ namespace SupportLauncher
         }
 
         /// <summary>Starts the file and returns its process id (0 if unknown).</summary>
-        public static int Start(string path)
+        /// <param name="runWithoutAdmin">
+        /// Run with the current user's normal rights even if the program asks for
+        /// administrator rights (Windows compatibility layer "RunAsInvoker").
+        /// No User Account Control prompt is shown; nothing is elevated.
+        /// </param>
+        public static int Start(string path, bool runWithoutAdmin)
         {
             RemoveZoneIdentifier(path);
+
+            // The child process inherits our environment.
+            Environment.SetEnvironmentVariable("__COMPAT_LAYER", runWithoutAdmin ? "RunAsInvoker" : null);
 
             var info = new SHELLEXECUTEINFO
             {

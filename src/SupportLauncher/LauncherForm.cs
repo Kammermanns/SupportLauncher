@@ -387,7 +387,7 @@ namespace SupportLauncher
         {
             try
             {
-                return ProcessStarter.Start(path);
+                return ProcessStarter.Start(path, _config.RunWithoutAdmin);
             }
             catch (Exception ex)
             {
