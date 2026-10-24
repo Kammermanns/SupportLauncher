@@ -32,6 +32,11 @@ namespace SupportLauncher
         /// windows until the customer confirms them.
         /// </summary>
         public bool RunWithoutAdmin { get; private set; } = false;
+        /// <summary>
+        /// Ask for administrator rights once when the launcher starts. QuickSupport,
+        /// started by the elevated launcher, then runs with full rights without asking again.
+        /// </summary>
+        public bool RequestAdmin { get; private set; } = false;
 
         public static LauncherConfig Load(string path)
         {
@@ -62,11 +67,8 @@ namespace SupportLauncher
             if (int.TryParse(Get(values, "StartWaitSeconds", null), out var w) && w > 0)
                 cfg.StartWaitSeconds = w;
 
-            var noAdmin = Get(values, "RunWithoutAdmin", "");
-            cfg.RunWithoutAdmin = noAdmin == "1" ||
-                                  noAdmin.Equals("true", StringComparison.OrdinalIgnoreCase) ||
-                                  noAdmin.Equals("ja", StringComparison.OrdinalIgnoreCase) ||
-                                  noAdmin.Equals("yes", StringComparison.OrdinalIgnoreCase);
+            cfg.RunWithoutAdmin = IsYes(Get(values, "RunWithoutAdmin", ""));
+            cfg.RequestAdmin = IsYes(Get(values, "RequestAdmin", ""));
 
             return cfg;
         }
@@ -118,6 +120,12 @@ namespace SupportLauncher
 
         private static string Get(Dictionary<string, string> v, string key, string fallback)
             => v.TryGetValue(key, out var s) && !string.IsNullOrWhiteSpace(s) ? s : fallback;
+
+        private static bool IsYes(string v)
+            => v == "1" ||
+               v.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+               v.Equals("ja", StringComparison.OrdinalIgnoreCase) ||
+               v.Equals("yes", StringComparison.OrdinalIgnoreCase);
 
         private static string[] SplitList(string s)
         {
