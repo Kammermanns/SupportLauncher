@@ -168,4 +168,10 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create $env:GITHUB_REF_NAME dist/SupportLauncher.zip dist/SupportLauncher-Demo.zip dist/SupportLauncher-Setup.exe dist/SupportLauncher.exe dist/SHA256SUMS.txt --draft --generate-notes
+        run: |
+          $notes = @"
+          SupportLauncher downloads the current remote support module (e.g. a customized TeamViewer QuickSupport) from a configured link, verifies its Authenticode signature and publisher, and starts it. See the [README](https://github.com/$env:GITHUB_REPOSITORY#readme) for configuration and silent installation.
+
+          **Code signing policy:** Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org). Details: [Code signing policy](https://github.com/$env:GITHUB_REPOSITORY/blob/main/CODE_SIGNING_POLICY.md) · [Privacy](https://github.com/$env:GITHUB_REPOSITORY/blob/main/PRIVACY.md)
+          "@
+          gh release create $env:GITHUB_REF_NAME dist/SupportLauncher.zip dist/SupportLauncher-Demo.zip dist/SupportLauncher-Setup.exe dist/SupportLauncher.exe dist/SHA256SUMS.txt --draft --generate-notes --notes $notes

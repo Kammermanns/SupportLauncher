@@ -90,11 +90,11 @@ Repository variables: `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`, `SIGN
 
 The artifact configurations are in [`.signpath/`](.signpath). Without `SIGNPATH_PROJECT_SLUG` the pipeline still builds, unsigned.
 
-## Code signing
+## Code signing policy
 
 Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
 
-See the [code signing policy](CODE_SIGNING_POLICY.md) and the [privacy policy](PRIVACY.md).
+Team roles, the release process and the behaviour of the software are described in the [Code signing policy](CODE_SIGNING_POLICY.md). Privacy: [PRIVACY.md](PRIVACY.md) – the program transfers no information to networked systems except the download of the configured support module.
 
 ## License
 

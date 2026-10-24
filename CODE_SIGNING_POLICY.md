@@ -8,7 +8,8 @@ Windows releases of SupportLauncher (`SupportLauncher.exe` and `SupportLauncher-
 
 | Role | Members | Responsibility |
 |---|---|---|
-| Committers and reviewers | @Kammermanns | May change the source code; external contributions are reviewed before merge |
+| Authors | @Kammermanns | Trusted to modify the source code without additional review |
+| Reviewers | @Kammermanns | Review all changes from other contributors (pull requests) before merge |
 | Approvers | @Kammermanns | Approve every signing request manually |
 
 All members use multi-factor authentication for GitHub and SignPath.
@@ -22,7 +23,13 @@ All members use multi-factor authentication for GitHub and SignPath.
 
 ## What the software does
 
-SupportLauncher downloads a file from the URL configured in `launcher.ini` and starts it only if its Authenticode signature is valid and the signer matches the configured publisher. It does not install drivers or services and needs no admin rights at runtime. See [PRIVACY.md](PRIVACY.md).
+SupportLauncher downloads a file from the URL configured in `launcher.ini` and starts it only if its Authenticode signature is valid and the signer matches the configured publisher. It does not install drivers or services and does not change the system configuration. See [PRIVACY.md](PRIVACY.md).
+
+Behaviour that touches Windows security features, stated openly:
+
+- **Security warning for the started module.** After its own signature and publisher check has passed, the launcher removes the "downloaded from the internet" marker of the module and starts it without the "Open File – Security Warning" dialog. Files that fail the check are never started.
+- **Administrator rights (optional, `RequestAdmin=1`).** The launcher asks for administrator rights through the normal Windows User Account Control prompt, once, and the started module inherits them. Nothing is elevated without that prompt.
+- **Run without administrator rights (optional, `RunWithoutAdmin=1`).** Starts the module with the user's normal rights only. This lowers privileges; it never raises them.
 
 ## Reporting
 
