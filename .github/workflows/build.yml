@@ -116,19 +116,49 @@ jobs:
           Copy-Item signed-setup/SupportLauncher-Setup.exe dist/SupportLauncher-Setup.exe -Force
           ./build/Verify-Signature.ps1 -Path dist/SupportLauncher-Setup.exe
 
+      - name: Collect release files
+        shell: pwsh
+        run: |
+          # Everything a user needs, side by side: setup, standalone EXE and the
+          # template files that the setup picks up when they sit next to it.
+          Copy-Item publish/SupportLauncher.exe dist/ -Force
+          Copy-Item branding/launcher.ini dist/ -Force
+          Copy-Item branding/app.ico dist/ -Force
+          if (Test-Path branding/logo.png) { Copy-Item branding/logo.png dist/ -Force }
+          Compress-Archive -Path dist/* -DestinationPath SupportLauncher.zip -Force
+          Move-Item SupportLauncher.zip dist/ -Force
+
       - name: Checksum
         shell: pwsh
-        run: (Get-FileHash dist/SupportLauncher-Setup.exe -Algorithm SHA256).Hash.ToLower() + "  SupportLauncher-Setup.exe" | Out-File dist/SHA256SUMS.txt -Encoding ascii
+        run: |
+          Get-ChildItem dist -File -Include *.exe,*.zip -Recurse | ForEach-Object {
+            (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower() + "  " + $_.Name
+          } | Out-File dist/SHA256SUMS.txt -Encoding ascii
 
       - name: Upload result
         uses: actions/upload-artifact@v4
         with:
-          name: SupportLauncher-Setup
-          path: dist/*
+          name: SupportLauncher
+          path: |
+            dist/*
+            !dist/SupportLauncher.zip
+
+      # Rolling pre-release with the newest build of main: a fixed download link
+      # for testing, without digging through the Actions tab.
+      - name: Update "latest build" pre-release
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest-build --yes --cleanup-tag 2>$null
+          $notes = "Automatic test build of commit $env:GITHUB_SHA. Not signed - for testing only. Signed versions are published as v* releases."
+          gh release create latest-build dist/SupportLauncher.zip dist/SupportLauncher-Setup.exe dist/SupportLauncher.exe dist/SHA256SUMS.txt `
+            --prerelease --target $env:GITHUB_SHA --title "Latest build (unsigned)" --notes $notes
 
       - name: Draft release
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create $env:GITHUB_REF_NAME dist/SupportLauncher-Setup.exe dist/SHA256SUMS.txt --draft --generate-notes
+        run: gh release create $env:GITHUB_REF_NAME dist/SupportLauncher.zip dist/SupportLauncher-Setup.exe dist/SupportLauncher.exe dist/SHA256SUMS.txt --draft --generate-notes
