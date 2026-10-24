@@ -16,7 +16,7 @@ namespace SupportLauncher
         {
             if (!VerifyAuthenticode(filePath, checkRevocation, out var trustResult))
             {
-                details = $"Invalid or missing signature (WinVerifyTrust 0x{trustResult:X8}).";
+                details = $"Ungültige oder fehlende Signatur (WinVerifyTrust 0x{trustResult:X8}).";
                 return false;
             }
 
@@ -28,7 +28,7 @@ namespace SupportLauncher
             }
             catch (Exception ex)
             {
-                details = "Signer certificate could not be read: " + ex.Message;
+                details = "Zertifikat des Herausgebers konnte nicht gelesen werden: " + ex.Message;
                 return false;
             }
 
@@ -36,12 +36,12 @@ namespace SupportLauncher
             {
                 if (SubjectMatches(subject, publisher))
                 {
-                    details = "Signed by: " + subject;
+                    details = "Signiert von: " + subject;
                     return true;
                 }
             }
 
-            details = "Unexpected publisher: " + subject;
+            details = "Unerwarteter Herausgeber: " + subject;
             return false;
         }
 
