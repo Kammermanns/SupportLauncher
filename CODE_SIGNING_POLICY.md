@@ -2,6 +2,8 @@
 
 Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
 
+**Status:** application to SignPath Foundation submitted, pending. Until signing is active, releases are published unsigned; verify them with `SHA256SUMS.txt` attached to each release.
+
 Windows releases of SupportLauncher (`SupportLauncher.exe` and `SupportLauncher-Setup.exe`) published on the [Releases](../../releases) page are signed. The signature names **SignPath Foundation** as publisher and confirms that the binary was built automatically from the source code in this repository.
 
 ## Team roles
